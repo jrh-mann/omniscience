@@ -74,7 +74,7 @@ class ProbeWeightSet(nn.Module):
         
         Optimization: safetensors stores metadata in header.
         """
-        with safe_open(path, framework="pt", device="cpu") as f:
+        with safe_open(str(path), framework="pt", device="cpu") as f:
             # Get shape without loading tensor data
             # Check for required keys
             keys = f.keys()
@@ -96,7 +96,7 @@ class ProbeWeightSet(nn.Module):
     
     def _load_single_probe(self, path: Path) -> tuple[torch.Tensor, float | None]:
         """Load probe from safetensors. Expected keys: 'weight', optionally 'bias'"""
-        with safe_open(path, framework="pt", device="cpu") as f:
+        with safe_open(str(path), framework="pt", device="cpu") as f:
             weight = f.get_tensor("weight")
             keys = f.keys()
             bias = f.get_tensor("bias").item() if "bias" in keys else None
