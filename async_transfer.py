@@ -1,5 +1,6 @@
 import torch
 import logging
+import multiprocessing as mp
 from collections import deque
 from dataclasses import dataclass
 from .tracking import ProbeResult
@@ -22,10 +23,11 @@ class AsyncProbeResultTracker:
     Manages async transfers using CUDA streams and events.
     """
     
-    def __init__(self, use_pinned_memory: bool = True):
+    def __init__(self, use_pinned_memory: bool = True, queue: mp.Queue | None = None):
         self.pending_queue: deque[PendingTransfer] = deque()
         self.completed_results: dict[str, list[dict]] = {} # Buffer for final results
         self.use_pinned_memory = use_pinned_memory
+        self.queue = queue
         
         # Create dedicated stream for CPU transfers
         if torch.cuda.is_available():
@@ -135,9 +137,18 @@ class AsyncProbeResultTracker:
                 scores=scores_np[i]
             )
             
-            if req_id not in self.completed_results:
-                self.completed_results[req_id] = []
-            self.completed_results[req_id].append(result.to_dict())
+            if self.queue is not None:
+                # If using queue, send immediately
+                self.queue.put(result.to_dict())
+            else:
+                # Store locally (fallback)
+                result_dict = result.to_dict()
+                # Add request_id to dict for easier processing by consumer
+                result_dict["request_id"] = req_id
+                
+                if req_id not in self.completed_results:
+                    self.completed_results[req_id] = []
+                self.completed_results[req_id].append(result_dict)
 
     def get_results(self, request_id: str) -> list[dict]:
         return self.completed_results.pop(request_id, [])
